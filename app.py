@@ -3,113 +3,151 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-# -----------------------------
-# Page Config
-# -----------------------------
 st.set_page_config(layout="wide")
 
 # -----------------------------
-# Title & Intro
+# Title
 # -----------------------------
-st.title("Silent Failure in ML Models")
+st.title("ModelGuard — Silent Failure Analysis")
 
 st.markdown("""
-This dashboard explores how increasing model complexity improves accuracy while progressively suppressing uncertainty awareness, leading to silent failure under distribution shift in imbalanced datasets.
+ModelGuard explores how machine learning models lose uncertainty awareness under different types of distribution shift.
+The goal is not to maximize accuracy — but to understand **when models should no longer be trusted**.
 """)
 
 # -----------------------------
 # Load Data
 # -----------------------------
-data_path = Path(__file__).resolve().parent / "data" / "final_results.csv"
+data_path = Path(__file__).resolve().parent / "results" / "final_results.csv"
 df = pd.read_csv(data_path)
-
+drift_types_path = Path(__file__).resolve().parent / "results" / "drift_types_final.csv"
+drift_types = pd.read_csv(drift_types_path)
 # -----------------------------
-# Controls
+# Sidebar
 # -----------------------------
-mode = st.radio("View Mode", ["Single Model", "Compare Models"], horizontal=True)
+st.sidebar.title("Controls")
 
-metric = st.selectbox(
-    "Select Metric",
+view = st.sidebar.radio(
+    "View Mode",
+    ["Reliability Ranking", "Drift Type Sensitivity", "Single Model Analysis"]
+)
+
+metric = st.sidebar.selectbox(
+    "Metric",
     ["Accuracy", "Confidence", "Entropy"]
 )
 
 metric_map = {
-    "Accuracy": ("raw_acc","sig_acc","iso_acc","Accuracy"),
-    "Confidence": ("raw_conf","sig_conf","iso_conf","Mean Confidence"),
-    "Entropy": ("raw_ent","sig_ent","iso_ent","Mean Entropy")
+    "Accuracy": "raw_acc",
+    "Confidence": "raw_conf",
+    "Entropy": "raw_ent"
 }
 
-raw_col, sig_col, iso_col, ylabel = metric_map[metric]
+metric_col = metric_map[metric]
 
 # -----------------------------
-# Plot
+# RELIABILITY RANKING VIEW
 # -----------------------------
-plt.figure(figsize=(8,5))
+if view == "Reliability Ranking":
 
-if mode == "Single Model":
-    model = st.selectbox("Select Model", df["model"].unique())
-    mdf = df[df["model"] == model].sort_values("drift")
+    st.subheader("Relative Model Reliability Ranking")
 
-    plt.plot(mdf["drift"], mdf[raw_col], marker="o", linewidth=2.5, label="Raw")
-    plt.plot(mdf["drift"], mdf[sig_col], marker="o", linewidth=2.5, linestyle="--", label="Sigmoid")
-    plt.plot(mdf["drift"], mdf[iso_col], marker="o", linewidth=2.5, linestyle=":", label="Isotonic")
+    scores = []
 
-    plt.title(f"{model} — {ylabel} under Distribution Shift", fontsize=14, weight="bold")
-
-else:
     for model in df["model"].unique():
-        mdf = df[df["model"] == model].sort_values("drift")
-        plt.plot(mdf["drift"], mdf[raw_col], marker="o", linewidth=2.5, label=model)
+        df_m = df[df["model"] == model].sort_values("drift")
 
-    plt.title(f"Raw {ylabel} Comparison Across Models", fontsize=14, weight="bold")
+        base = df_m.iloc[0]
+        last = df_m.iloc[-1]
 
-plt.xlabel("Drift Intensity", fontsize=12)
-plt.ylabel(ylabel, fontsize=12)
+        da = abs(last["raw_acc"] - base["raw_acc"])
+        dc = abs(last["raw_conf"] - base["raw_conf"])
+        de = abs(last["raw_ent"] - base["raw_ent"])
 
-plt.grid(True, alpha=0.3)
-plt.legend(frameon=False)
+        score = (da + dc + de) / 3
+        scores.append([model, score])
 
-st.pyplot(plt)
+    rank_df = pd.DataFrame(scores, columns=["Model", "Reliability_Score"])
+    rank_df["Rank"] = rank_df["Reliability_Score"].rank(ascending=False)
 
-# -----------------------------
-# Interpretation Text
-# -----------------------------
-st.markdown("---")
+    st.dataframe(rank_df.sort_values("Rank"))
 
-if metric == "Accuracy":
+    plt.figure(figsize=(6,4))
+    plt.bar(rank_df["Model"], rank_df["Reliability_Score"])
+    plt.title("ModelGuard Reliability Score (Higher = More Aware)")
+    plt.ylabel("Sensitivity to Drift")
+    plt.grid(axis="y", alpha=0.3)
+    st.pyplot(plt)
+
     st.markdown("""
 **Interpretation:**  
-Accuracy remains high for complex models even under strong drift, masking reliability collapse in minority class detection.
+Higher scores indicate stronger reaction to drift.  
+Lower scores indicate silent failure risk.
 """)
 
-elif metric == "Confidence":
+# -----------------------------
+# DRIFT TYPE SENSITIVITY
+# -----------------------------
+elif view == "Drift Type Sensitivity":
+
+    st.subheader("Drift-Type Sensitivity Analysis")
+
+    dtype = st.selectbox(
+        "Select Drift Type",
+        drift_types["drift_type"].unique()
+    )
+
+    df_t = drift_types[drift_types["drift_type"] == dtype]
+
+    plt.figure(figsize=(8,5))
+
+    for m in df_t["model"].unique():
+        d = df_t[df_t["model"] == m].sort_values("drift")
+        plt.plot(d["drift"], d[metric_col], marker="o", linewidth=2.5, label=m)
+
+    plt.title(f"{metric} under {dtype} drift")
+    plt.xlabel("Drift Intensity")
+    plt.ylabel(metric)
+    plt.grid(alpha=0.3)
+    plt.legend()
+    st.pyplot(plt)
+
     st.markdown("""
 **Interpretation:**  
-Flat confidence curves indicate loss of uncertainty awareness. The model does not realize when it becomes unreliable.
+Different models fail silently under different drift patterns.
 """)
 
+# -----------------------------
+# SINGLE MODEL VIEW
+# -----------------------------
 else:
-    st.markdown("""
-**Interpretation:**  
-Entropy should increase under drift. Flat entropy means the model is blind to distribution shift.
-""")
 
-# -----------------------------
-# Model-Specific Insight
-# -----------------------------
-if mode == "Single Model":
+    model = st.selectbox("Select Model", df["model"].unique())
+
+    df_m = df[df["model"] == model].sort_values("drift")
+
+    plt.figure(figsize=(8,5))
+    plt.plot(df_m["drift"], df_m[metric_col], marker="o", linewidth=2.5)
+    plt.title(f"{model} — {metric} under Drift")
+    plt.xlabel("Drift Intensity")
+    plt.ylabel(metric)
+    plt.grid(alpha=0.3)
+    st.pyplot(plt)
+
     if model == "LR":
-        st.info("Logistic Regression shows visible uncertainty under drift — failure is detectable.")
+        st.info("Logistic Regression reacts strongly to drift — failure is visible.")
     elif model == "RF":
-        st.warning("Random Forest maintains confidence despite drift — silent failure begins.")
+        st.warning("Random Forest partially reacts — silent failure risk.")
     else:
-        st.error("XGBoost shows extreme confidence rigidity — silent failure is most severe.")
+        st.error("XGBoost shows confidence rigidity — highest silent failure risk.")
 
 # -----------------------------
-# Footer Message
+# Closing Note
 # -----------------------------
 st.markdown("""
 ---
-**Key Insight:**  
-Optimizing only for accuracy produces models that appear reliable while progressively losing their ability to signal uncertainty, resulting in silent reliability collapse.
+### ModelGuard Insight
+
+High accuracy does not guarantee reliability.  
+Models must not only perform well, they must know when they are no longer reliable.
 """)
