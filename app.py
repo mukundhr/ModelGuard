@@ -8,11 +8,11 @@ st.set_page_config(layout="wide")
 # -----------------------------
 # Title
 # -----------------------------
-st.title("ModelGuard — Silent Failure Analysis")
+st.title("ModelGuard - Silent Failure Analysis")
 
 st.markdown("""
 ModelGuard explores how machine learning models lose uncertainty awareness under different types of distribution shift.
-The goal is not to maximize accuracy — but to understand **when models should no longer be trusted**.
+The goal is not to maximize accuracy - but to understand **when models should no longer be trusted**.
 """)
 
 # -----------------------------
@@ -128,18 +128,18 @@ else:
 
     plt.figure(figsize=(8,5))
     plt.plot(df_m["drift"], df_m[metric_col], marker="o", linewidth=2.5)
-    plt.title(f"{model} — {metric} under Drift")
+    plt.title(f"{model} - {metric} under Drift")
     plt.xlabel("Drift Intensity")
     plt.ylabel(metric)
     plt.grid(alpha=0.3)
     st.pyplot(plt)
 
     if model == "LR":
-        st.info("Logistic Regression reacts strongly to drift — failure is visible.")
+        st.info("Logistic Regression reacts strongly to drift - failure is visible.")
     elif model == "RF":
-        st.warning("Random Forest partially reacts — silent failure risk.")
+        st.warning("Random Forest partially reacts - silent failure risk.")
     else:
-        st.error("XGBoost shows confidence rigidity — highest silent failure risk.")
+        st.error("XGBoost shows confidence rigidity - highest silent failure risk.")
 
 # -----------------------------
 # Closing Note

@@ -1,4 +1,4 @@
-# ModelGuard — Silent Failure Analysis in Machine Learning Models
+# ModelGuard - Silent Failure Analysis in Machine Learning Models
 
 **ModelGuard reveals when high-accuracy ML models become dangerously overconfident under distribution shift.**
 
@@ -6,7 +6,7 @@
 
 ## Overview
 
-ModelGuard is a machine learning reliability analysis framework that studies **silent failure** — situations where models remain confident and well-performing while operating outside their training distribution.
+ModelGuard is a machine learning reliability analysis framework that studies **silent failure** - situations where models remain confident and well-performing while operating outside their training distribution.
 
 Instead of asking:
 
@@ -33,7 +33,7 @@ However, in real-world deployment:
 
 This creates the most dangerous failure mode in ML systems:
 
-> **Silent failure — confident predictions when the model no longer understands the data.**
+> **Silent failure - confident predictions when the model no longer understands the data.**
 
 ModelGuard was built to expose this phenomenon.
 
@@ -95,7 +95,7 @@ They generalize well on IID test data.
 
 However, under distribution shift they exhibit:
 
-> **Confidence rigidity — remaining highly confident outside their training distribution.**
+> **Confidence rigidity - remaining highly confident outside their training distribution.**
 
 This is not a training failure.  
 It is a deployment reliability failure.
