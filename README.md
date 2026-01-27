@@ -115,21 +115,7 @@ Bias drift is particularly dangerous:
 This demonstrates that silent failure is both **model-dependent** and **drift-dependent**.
 
 ---
-
-## ModelGuard Reliability Score
-
-ModelGuard introduces a **relative reliability score** that measures how sensitively a model reacts to drift by tracking changes in:
-
-- Accuracy
-- Confidence
-- Entropy
-
-Higher sensitivity indicates greater awareness.
-
-The score is used only for **relative ranking**, not absolute trust assignment.
-
 ### Reliability Ranking
-
 Logistic Regression > Random Forest > XGBoost
 
 
@@ -178,17 +164,37 @@ Instead, ModelGuard provides a framework to:
 
 ---
 
-## Interactive Dashboard
+## Quantitative Summary
 
-ModelGuard includes a Streamlit dashboard to explore:
+### Baseline Performance (No Drift)
 
-- Reliability ranking  
-- Drift-type sensitivity  
-- Model awareness vs blindness  
-- Confidence and entropy dynamics  
+| Model | Test Accuracy | Mean Confidence | Mean Entropy |
+| --- | --- | --- | --- |
+| Logistic Regression | ~97.6% | ~0.94 | ~0.15 |
+| Random Forest | ~99.9% | ~0.99 | ~0.002 |
+| XGBoost | ~99.95% | ~0.999 | ~0.0004 |
+
+### Calibration Performance (ECE)
+
+| Model | Raw ECE | Calibrated ECE |
+| --- | --- | --- |
+| LR | ~0.029 | ~0.0003 |
+| RF | ~0.00020 | ~0.00017 |
+| XGB | ~0.00032 | ~0.00013 |
+
+### Reliability Sensitivity Score
+
+| Model | Reliability Score |
+| --- | --- |
+| LR | ~0.081 |
+| RF | ~0.009 |
+| XGB | ~0.001 |
+
+---
 
 Run:
 
 ```bash
 streamlit run app.py
+```
 
