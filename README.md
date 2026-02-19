@@ -192,9 +192,3 @@ Instead, ModelGuard provides a framework to:
 
 ---
 
-Run:
-
-```bash
-streamlit run app.py
-```
-

@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ModelGuard — Silent Failure Analysis</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: #1a2235;
+            --bg-card-hover: #1f2a40;
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-purple: #8b5cf6;
+            --accent-emerald: #10b981;
+            --accent-amber: #f59e0b;
+            --accent-red: #ef4444;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --border: #1e293b;
+            --gradient-1: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            --gradient-2: linear-gradient(135deg, #06b6d4, #10b981);
+            --gradient-3: linear-gradient(135deg, #f59e0b, #ef4444);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ---- HERO ---- */
+        .hero {
+            position: relative;
+            padding: 100px 40px 80px;
+            text-align: center;
+            overflow: hidden;
+            background: radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.15) 0%, transparent 60%),
+                        radial-gradient(ellipse at 80% 50%, rgba(139,92,246,0.1) 0%, transparent 50%),
+                        var(--bg-primary);
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cdefs%3E%3Cpattern id='g' width='60' height='60' patternUnits='userSpaceOnUse'%3E%3Cpath d='M0 60L60 0' stroke='%23ffffff08' stroke-width='.5'/%3E%3C/pattern%3E%3C/defs%3E%3Crect fill='url(%23g)' width='100%25' height='100%25'/%3E%3C/svg%3E");
+            pointer-events: none;
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            border-radius: 999px;
+            border: 1px solid rgba(59,130,246,0.3);
+            background: rgba(59,130,246,0.08);
+            color: var(--accent-blue);
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 24px;
+        }
+        .hero-badge .dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--accent-blue);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .hero h1 {
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 16px;
+        }
+        .hero h1 span {
+            background: var(--gradient-1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero p {
+            max-width: 640px;
+            margin: 0 auto;
+            font-size: 1.15rem;
+            color: var(--text-secondary);
+            line-height: 1.7;
+        }
+
+        /* ---- NAV TABS ---- */
+        .nav-wrap {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(10,14,26,0.85);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--border);
+        }
+        .nav {
+            display: flex;
+            gap: 4px;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 12px 20px;
+            overflow-x: auto;
+        }
+        .nav button {
+            flex-shrink: 0;
+            padding: 10px 22px;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 0.88rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .nav button:hover { background: rgba(255,255,255,0.05); color: var(--text-primary); }
+        .nav button.active {
+            background: var(--accent-blue);
+            color: #fff;
+            box-shadow: 0 2px 12px rgba(59,130,246,0.35);
+        }
+
+        /* ---- SECTIONS ---- */
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+        .section { display: none; padding: 48px 0 80px; }
+        .section.active { display: block; }
+        .section-title {
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .section-subtitle {
+            color: var(--text-secondary);
+            margin-bottom: 40px;
+            font-size: 0.95rem;
+        }
+
+        /* ---- STAT CARDS ---- */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 48px;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px 24px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+        .stat-card .label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        .stat-card .sub {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+        .stat-card.blue .value   { color: var(--accent-blue); }
+        .stat-card.cyan .value   { color: var(--accent-cyan); }
+        .stat-card.purple .value { color: var(--accent-purple); }
+        .stat-card.emerald .value{ color: var(--accent-emerald); }
+        .stat-card.amber .value  { color: var(--accent-amber); }
+        .stat-card.red .value    { color: var(--accent-red); }
+
+        /* ---- CHART CARDS ---- */
+        .chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 32px;
+        }
+        .chart-card h3 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .chart-card .chart-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+        .chart-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        @media (max-width: 800px) {
+            .chart-row { grid-template-columns: 1fr; }
+        }
+
+        /* ---- TABLE ---- */
+        .table-wrap {
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 32px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.88rem;
+        }
+        thead { background: rgba(59,130,246,0.08); }
+        th {
+            text-align: left;
+            padding: 14px 18px;
+            font-weight: 600;
+            color: var(--accent-blue);
+            white-space: nowrap;
+        }
+        td {
+            padding: 12px 18px;
+            border-top: 1px solid var(--border);
+            color: var(--text-secondary);
+        }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+
+        /* ---- INSIGHT BOXES ---- */
+        .insight-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 32px;
+        }
+        .insight-box {
+            border-radius: 14px;
+            padding: 24px;
+            border-left: 4px solid;
+        }
+        .insight-box.blue   { background: rgba(59,130,246,0.06); border-color: var(--accent-blue); }
+        .insight-box.amber  { background: rgba(245,158,11,0.06); border-color: var(--accent-amber); }
+        .insight-box.red    { background: rgba(239,68,68,0.06);  border-color: var(--accent-red); }
+        .insight-box.emerald{ background: rgba(16,185,129,0.06); border-color: var(--accent-emerald); }
+        .insight-box h4 {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .insight-box p {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* ---- CONTROLS ---- */
+        .controls {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 28px;
+        }
+        .controls select, .controls button {
+            padding: 10px 18px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--bg-card);
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 0.88rem;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+        .controls select:focus, .controls button:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+        .controls select:hover, .controls button:hover {
+            border-color: var(--accent-blue);
+        }
+
+        /* ---- METHODOLOGY ---- */
+        .method-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+        .method-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+        }
+        .method-card .icon {
+            width: 44px; height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            margin-bottom: 16px;
+        }
+        .method-card .icon.blue   { background: rgba(59,130,246,0.12); }
+        .method-card .icon.purple { background: rgba(139,92,246,0.12); }
+        .method-card .icon.cyan   { background: rgba(6,182,212,0.12); }
+        .method-card .icon.amber  { background: rgba(245,158,11,0.12); }
+        .method-card h4 { font-weight: 600; margin-bottom: 8px; }
+        .method-card p { font-size: 0.85rem; color: var(--text-secondary); }
+
+        /* ---- FOOTER ---- */
+        .footer {
+            text-align: center;
+            padding: 48px 24px;
+            border-top: 1px solid var(--border);
+            color: var(--text-muted);
+            font-size: 0.82rem;
+        }
+        .footer span { color: var(--accent-blue); font-weight: 600; }
+
+        /* Plotly overrides */
+        .js-plotly-plot .plotly .modebar { top: 4px !important; right: 4px !important; }
+    </style>
+</head>
+<body>
+
+<!-- ==================== HERO ==================== -->
+<section class="hero">
+    <h1>Model<span>Guard</span></h1>
+    <p>Exploring how machine learning models lose uncertainty awareness under distribution shift. High accuracy does not guarantee reliability — models must know when they can no longer be trusted.</p>
+</section>
+
+<!-- ==================== NAVIGATION ==================== -->
+<div class="nav-wrap">
+    <div class="nav">
+        <button class="active" onclick="showSection('overview')">Overview</button>
+        <button onclick="showSection('calibration')">Calibration</button>
+        <button onclick="showSection('drift-types')">Drift Analysis</button>
+        <button onclick="showSection('ranking')">Reliability Ranking</button>
+        <button onclick="showSection('methodology')">Methodology</button>
+    </div>
+</div>
+
+<!-- ==================== OVERVIEW ==================== -->
+<div class="container">
+<section id="overview" class="section active">
+    <h2 class="section-title">Experiment Overview</h2>
+    <p class="section-subtitle">Key metrics across three models tested on the Credit Card Fraud Detection dataset (284,807 transactions).</p>
+
+    <div class="stats-grid">
+        <div class="stat-card blue">
+            <div class="label">Models Evaluated</div>
+            <div class="value">3</div>
+            <div class="sub">Logistic Regression, Random Forest, XGBoost</div>
+        </div>
+        <div class="stat-card cyan">
+            <div class="label">Drift Types</div>
+            <div class="value">3</div>
+            <div class="sub">Noise, Scale, Bias perturbations</div>
+        </div>
+        <div class="stat-card purple">
+            <div class="label">Drift Levels</div>
+            <div class="value">4</div>
+            <div class="sub">0.0, 0.2, 0.5, 1.0 intensity</div>
+        </div>
+        <div class="stat-card emerald">
+            <div class="label">Calibration Methods</div>
+            <div class="value">3</div>
+            <div class="sub">Raw, Sigmoid (Platt), Isotonic</div>
+        </div>
+        <div class="stat-card amber">
+            <div class="label">Total Experiments</div>
+            <div class="value">108</div>
+            <div class="sub">3 models × 3 drifts × 4 levels × 3 calibrations</div>
+        </div>
+        <div class="stat-card red">
+            <div class="label">Key Finding</div>
+            <div class="value">Silent Failure</div>
+            <div class="sub">XGBoost stays confident even when wrong</div>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <h3>Accuracy Under Noise Drift — All Models</h3>
+        <p class="chart-desc">Comparing how each model's raw accuracy degrades as Gaussian noise increases.</p>
+        <div id="overview-acc-chart"></div>
+    </div>
+
+    <div class="chart-row">
+        <div class="chart-card">
+            <h3>Confidence Under Noise Drift</h3>
+            <p class="chart-desc">Mean prediction confidence as noise intensity grows.</p>
+            <div id="overview-conf-chart"></div>
+        </div>
+        <div class="chart-card">
+            <h3>Entropy Under Noise Drift</h3>
+            <p class="chart-desc">Mean predictive entropy — higher means more uncertain.</p>
+            <div id="overview-ent-chart"></div>
+        </div>
+    </div>
+
+    <div class="insight-grid">
+        <div class="insight-box blue">
+            <h4>Logistic Regression</h4>
+            <p>Shows the largest accuracy drop under drift (97.6% → 75.7% under noise). Confidence also shifts, making failure <strong>detectable</strong>. This is the most honest model.</p>
+        </div>
+        <div class="insight-box amber">
+            <h4>Random Forest</h4>
+            <p>Maintains near-perfect accuracy (99.95% → 99.91%) even under heavy drift. Confidence barely moves — partial silent failure risk with slight entropy increase.</p>
+        </div>
+        <div class="insight-box red">
+            <h4>XGBoost</h4>
+            <p>Highest raw accuracy (99.96%) with near-zero entropy. Confidence remains rigid at ~99.99% regardless of drift. <strong>Highest silent failure risk</strong> — the model never signals distrust.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== CALIBRATION ==================== -->
+<section id="calibration" class="section">
+    <h2 class="section-title">Calibration Analysis</h2>
+    <p class="section-subtitle">How Platt Scaling (sigmoid) and Isotonic Regression affect model reliability under drift.</p>
+
+    <div class="controls">
+        <select id="cal-model-select" onchange="updateCalibration()">
+            <option value="LR">Logistic Regression</option>
+            <option value="RF">Random Forest</option>
+            <option value="XGB">XGBoost</option>
+        </select>
+    </div>
+
+    <div class="chart-row">
+        <div class="chart-card">
+            <h3>Accuracy — Raw vs Calibrated</h3>
+            <p class="chart-desc">How calibration affects accuracy under increasing noise drift.</p>
+            <div id="cal-acc-chart"></div>
+        </div>
+        <div class="chart-card">
+            <h3>Confidence — Raw vs Calibrated</h3>
+            <p class="chart-desc">Mean confidence comparison across calibration methods.</p>
+            <div id="cal-conf-chart"></div>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <h3>Entropy — Raw vs Calibrated</h3>
+        <p class="chart-desc">Predictive entropy reveals uncertainty; higher values indicate the model is less certain.</p>
+        <div id="cal-ent-chart"></div>
+    </div>
+
+    <div class="chart-card">
+        <h3>Calibration Results Table</h3>
+        <p class="chart-desc">Full numerical breakdown of all calibration experiments.</p>
+        <div id="cal-table"></div>
+    </div>
+</section>
+
+<!-- ==================== DRIFT TYPES ==================== -->
+<section id="drift-types" class="section">
+    <h2 class="section-title">Drift Type Sensitivity</h2>
+    <p class="section-subtitle">How different perturbation types — noise, scale, and bias — uniquely affect each model.</p>
+
+    <div class="controls">
+        <select id="drift-metric-select" onchange="updateDriftCharts()">
+            <option value="raw_acc">Accuracy</option>
+            <option value="raw_conf">Confidence</option>
+            <option value="raw_ent">Entropy</option>
+        </select>
+    </div>
+
+    <div class="chart-row">
+        <div class="chart-card">
+            <h3>Logistic Regression</h3>
+            <p class="chart-desc">LR sensitivity across drift types.</p>
+            <div id="drift-lr-chart"></div>
+        </div>
+        <div class="chart-card">
+            <h3>Random Forest</h3>
+            <p class="chart-desc">RF sensitivity across drift types.</p>
+            <div id="drift-rf-chart"></div>
+        </div>
+    </div>
+
+    <div class="chart-row">
+        <div class="chart-card">
+            <h3>XGBoost</h3>
+            <p class="chart-desc">XGB sensitivity across drift types.</p>
+            <div id="drift-xgb-chart"></div>
+        </div>
+        <div class="chart-card">
+            <h3>Cross-Model Comparison</h3>
+            <p class="chart-desc">All models under a selected drift type.</p>
+            <div class="controls" style="margin-bottom:12px">
+                <select id="drift-type-select" onchange="updateDriftCharts()">
+                    <option value="noise">Noise</option>
+                    <option value="scale">Scale</option>
+                    <option value="bias">Bias</option>
+                </select>
+            </div>
+            <div id="drift-compare-chart"></div>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <h3>Full Drift Type Results</h3>
+        <p class="chart-desc">Complete numerical data for all drift experiments.</p>
+        <div id="drift-table"></div>
+    </div>
+</section>
+
+<!-- ==================== RANKING ==================== -->
+<section id="ranking" class="section">
+    <h2 class="section-title">Reliability Ranking</h2>
+    <p class="section-subtitle">A composite score measuring how strongly each model reacts to drift. Higher sensitivity = the model signals when it's failing. Lower sensitivity = silent failure risk.</p>
+
+    <div id="ranking-chart"></div>
+
+    <div style="margin-top: 32px;">
+        <div class="chart-card">
+            <h3>Ranking Methodology</h3>
+            <p class="chart-desc">The reliability score is the average absolute change in accuracy, confidence, and entropy between no-drift and maximum-drift conditions across all drift types.</p>
+            <div id="ranking-table"></div>
+        </div>
+    </div>
+
+    <div class="insight-grid" style="margin-top:32px;">
+        <div class="insight-box emerald">
+            <h4>Most Self-Aware: Logistic Regression</h4>
+            <p>LR exhibits the highest sensitivity to drift across all metrics. When performance degrades, its confidence drops and entropy rises — making failure <strong>visible and actionable</strong>.</p>
+        </div>
+        <div class="insight-box amber">
+            <h4>Partially Aware: Random Forest</h4>
+            <p>RF shows moderate sensitivity. Under noise drift, entropy increases measurably, but the overall confidence remains high. There's a window where RF fails without adequate warning.</p>
+        </div>
+        <div class="insight-box red">
+            <h4>Silent Failure: XGBoost</h4>
+            <p>XGBoost shows the lowest sensitivity score. Under every drift type, its confidence barely changes and entropy stays near zero. This is the textbook definition of <strong>silent model failure</strong>.</p>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== METHODOLOGY ==================== -->
+<section id="methodology" class="section">
+    <h2 class="section-title">Methodology</h2>
+    <p class="section-subtitle">Experimental design and technical details behind ModelGuard.</p>
+
+    <div class="method-grid">
+        <div class="method-card">
+            <div class="icon blue">📊</div>
+            <h4>Dataset</h4>
+            <p>Credit Card Fraud Detection dataset with 284,807 transactions (492 frauds, ~0.17% positive rate). Split 60/20/20 into train, validation, and test sets with stratified sampling.</p>
+        </div>
+        <div class="method-card">
+            <div class="icon purple">🤖</div>
+            <h4>Models</h4>
+            <p><strong>Logistic Regression</strong> — linear baseline.<br>
+            <strong>Random Forest</strong> — ensemble of decision trees.<br>
+            <strong>XGBoost</strong> — gradient-boosted trees (300 estimators, max depth 6).</p>
+        </div>
+        <div class="method-card">
+            <div class="icon cyan">🔄</div>
+            <h4>Drift Simulation</h4>
+            <p><strong>Noise:</strong> Gaussian noise N(0, σ) added to all features.<br>
+            <strong>Scale:</strong> First 5 features multiplied by (1+intensity).<br>
+            <strong>Bias:</strong> Constant shift added to all features.<br>
+            Intensities: 0.0, 0.2, 0.5, 1.0.</p>
+        </div>
+        <div class="method-card">
+            <div class="icon amber">📐</div>
+            <h4>Calibration</h4>
+            <p><strong>Platt Scaling</strong> (sigmoid) — fits a logistic function to model outputs.<br>
+            <strong>Isotonic Regression</strong> — non-parametric monotonic calibration.<br>
+            Both fitted on the held-out validation set using <code>CalibratedClassifierCV</code>.</p>
+        </div>
+    </div>
+
+    <div class="chart-card" style="margin-top:32px;">
+        <h3>Metrics Explained</h3>
+        <p class="chart-desc">Three core metrics evaluate model reliability under shift.</p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>Metric</th><th>Formula</th><th>Interpretation</th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="color:var(--text-primary);font-weight:500;">Accuracy</td>
+                        <td>Correct predictions / Total predictions</td>
+                        <td>How often the model is right — but does not reveal if the model <em>knows</em> when it's wrong.</td>
+                    </tr>
+                    <tr>
+                        <td style="color:var(--text-primary);font-weight:500;">Mean Confidence</td>
+                        <td>avg(max(P(y|x)))</td>
+                        <td>Average of the model's highest class probability. A confident-but-wrong model fails silently.</td>
+                    </tr>
+                    <tr>
+                        <td style="color:var(--text-primary);font-weight:500;">Mean Entropy</td>
+                        <td>−Σ p·log(p)</td>
+                        <td>Measures prediction uncertainty. Higher entropy = more uncertainty = the model signals it is unsure.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+</div>
+
+<!-- ==================== FOOTER ==================== -->
+<div class="footer">
+    <p><span>ModelGuard</span> — Silent Failure Analysis &nbsp;|&nbsp; Credit Card Fraud Detection Experiments</p>
+    <p style="margin-top:6px;">Built with Plotly.js &nbsp;·&nbsp; Logistic Regression &nbsp;·&nbsp; Random Forest &nbsp;·&nbsp; XGBoost</p>
+</div>
+
+<!-- ==================== JAVASCRIPT ==================== -->
+<script>
+// ===================== DATA =====================
+const driftLevels = [0.0, 0.2, 0.5, 1.0];
+
+// Final results (calibration by model, noise drift)
+const calData = {
+    LR: {
+        drift: [0.0, 0.2, 0.5, 1.0],
+        raw_acc:  [0.9758, 0.9616, 0.8835, 0.7594],
+        sig_acc:  [0.9991, 0.9991, 0.9991, 0.9991],
+        iso_acc:  [0.9994, 0.9993, 0.9994, 0.9988],
+        raw_conf: [0.9467, 0.9367, 0.9194, 0.9299],
+        sig_conf: [0.9992, 0.9991, 0.9990, 0.9983],
+        iso_conf: [0.9992, 0.9991, 0.9977, 0.9864],
+        raw_ent:  [0.1558, 0.1702, 0.1925, 0.1644],
+        sig_ent:  [0.0057, 0.0059, 0.0066, 0.0101],
+        iso_ent:  [0.0035, 0.0043, 0.0100, 0.0394]
+    },
+    RF: {
+        drift: [0.0, 0.2, 0.5, 1.0],
+        raw_acc:  [0.9995, 0.9994, 0.9994, 0.9991],
+        sig_acc:  [0.9995, 0.9994, 0.9994, 0.9992],
+        iso_acc:  [0.9995, 0.9994, 0.9994, 0.9991],
+        raw_conf: [0.9994, 0.9991, 0.9983, 0.9954],
+        sig_conf: [0.9995, 0.9995, 0.9994, 0.9994],
+        iso_conf: [0.9994, 0.9992, 0.9987, 0.9968],
+        raw_ent:  [0.0023, 0.0039, 0.0081, 0.0231],
+        sig_ent:  [0.0041, 0.0042, 0.0043, 0.0045],
+        iso_ent:  [0.0032, 0.0041, 0.0065, 0.0171]
+    },
+    XGB: {
+        drift: [0.0, 0.2, 0.5, 1.0],
+        raw_acc:  [0.9996, 0.9995, 0.9992, 0.9991],
+        sig_acc:  [0.9996, 0.9995, 0.9994, 0.9991],
+        iso_acc:  [0.9996, 0.9995, 0.9993, 0.9992],
+        raw_conf: [0.99988, 0.99983, 0.99973, 0.99953],
+        sig_conf: [0.99948, 0.99949, 0.99946, 0.99945],
+        iso_conf: [0.99949, 0.99938, 0.99919, 0.99868],
+        raw_ent:  [0.00049, 0.00064, 0.00095, 0.00176],
+        sig_ent:  [0.00385, 0.00388, 0.00393, 0.00395],
+        iso_ent:  [0.00308, 0.00354, 0.00444, 0.00671]
+    }
+};
+
+// Drift types data (all models, all drift types)
+const driftData = [
+    // LR
+    {model:"Logistic Regression", drift_type:"noise", drift:[0,0.2,0.5,1.0], raw_acc:[0.9758,0.9623,0.8830,0.7571], raw_conf:[0.9467,0.9373,0.9194,0.9288], raw_ent:[0.1558,0.1695,0.1924,0.1655]},
+    {model:"Logistic Regression", drift_type:"scale", drift:[0,0.2,0.5,1.0], raw_acc:[0.9758,0.9650,0.9349,0.8695], raw_conf:[0.9467,0.9375,0.9249,0.9105], raw_ent:[0.1558,0.1708,0.1911,0.2102]},
+    {model:"Logistic Regression", drift_type:"bias",  drift:[0,0.2,0.5,1.0], raw_acc:[0.9758,0.9822,0.9884,0.9932], raw_conf:[0.9467,0.9588,0.9726,0.9864], raw_ent:[0.1558,0.1268,0.0911,0.0503]},
+    // RF
+    {model:"Random Forest", drift_type:"noise", drift:[0,0.2,0.5,1.0], raw_acc:[0.9995,0.9994,0.9994,0.9991], raw_conf:[0.9994,0.9991,0.9983,0.9954], raw_ent:[0.0023,0.0039,0.0080,0.0232]},
+    {model:"Random Forest", drift_type:"scale", drift:[0,0.2,0.5,1.0], raw_acc:[0.9995,0.9995,0.9994,0.9994], raw_conf:[0.9994,0.9992,0.9988,0.9984], raw_ent:[0.0023,0.0031,0.0047,0.0070]},
+    {model:"Random Forest", drift_type:"bias",  drift:[0,0.2,0.5,1.0], raw_acc:[0.9995,0.9993,0.9992,0.9990], raw_conf:[0.9994,0.9992,0.9985,0.9970], raw_ent:[0.0023,0.0031,0.0070,0.0158]},
+    // XGB
+    {model:"XGBoost", drift_type:"noise", drift:[0,0.2,0.5,1.0], raw_acc:[0.9996,0.9994,0.9994,0.9992], raw_conf:[0.99988,0.99981,0.99973,0.99960], raw_ent:[0.00049,0.00067,0.00094,0.00165]},
+    {model:"XGBoost", drift_type:"scale", drift:[0,0.2,0.5,1.0], raw_acc:[0.9996,0.9996,0.9995,0.9995], raw_conf:[0.99988,0.99989,0.99986,0.99984], raw_ent:[0.00049,0.00048,0.00055,0.00063]},
+    {model:"XGBoost", drift_type:"bias",  drift:[0,0.2,0.5,1.0], raw_acc:[0.9996,0.9994,0.9994,0.9993], raw_conf:[0.99988,0.99993,0.99991,0.99992], raw_ent:[0.00049,0.00026,0.00025,0.00021]}
+];
+
+const modelColors = {
+    "Logistic Regression": "#3b82f6",
+    "Random Forest":       "#10b981",
+    "XGBoost":             "#f59e0b",
+    "LR": "#3b82f6",
+    "RF": "#10b981",
+    "XGB": "#f59e0b"
+};
+const calMethodColors = { raw: "#3b82f6", sig: "#8b5cf6", iso: "#06b6d4" };
+const driftTypeColors = { noise: "#3b82f6", scale: "#f59e0b", bias: "#ef4444" };
+
+const plotLayout = {
+    paper_bgcolor: "rgba(0,0,0,0)",
+    plot_bgcolor:  "rgba(0,0,0,0)",
+    font: { family: "Inter, sans-serif", color: "#94a3b8", size: 12 },
+    margin: { l: 56, r: 24, t: 32, b: 48 },
+    xaxis: { gridcolor: "#1e293b", zeroline: false, title: { text: "Drift Intensity", standoff: 12 } },
+    yaxis: { gridcolor: "#1e293b", zeroline: false },
+    legend: { bgcolor: "rgba(0,0,0,0)", font: { size: 11 } },
+    hovermode: "x unified"
+};
+const plotConfig = { displayModeBar: false, responsive: true };
+
+function traceLine(x, y, name, color, dash) {
+    return {
+        x, y, name,
+        type: "scatter", mode: "lines+markers",
+        line: { color, width: 2.5, dash: dash || "solid" },
+        marker: { size: 7 }
+    };
+}
+
+// ===================== NAVIGATION =====================
+function showSection(id) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    event.currentTarget.classList.add('active');
+    // Re-render charts that were drawn in hidden divs
+    requestAnimationFrame(() => {
+        if (id === 'ranking')    renderRanking();
+        if (id === 'overview')   renderOverview();
+        if (id === 'calibration') updateCalibration();
+        if (id === 'drift-types') updateDriftCharts();
+        // Resize all visible Plotly charts
+        document.getElementById(id).querySelectorAll('.js-plotly-plot').forEach(el => Plotly.Plots.resize(el));
+    });
+}
+
+// ===================== OVERVIEW CHARTS =====================
+function renderOverview() {
+    const noiseData = driftData.filter(d => d.drift_type === "noise");
+    // Accuracy
+    Plotly.newPlot("overview-acc-chart",
+        noiseData.map(d => traceLine(d.drift, d.raw_acc, d.model, modelColors[d.model])),
+        { ...plotLayout, yaxis: { ...plotLayout.yaxis, title: "Accuracy", range: [0.7, 1.005] } }, plotConfig
+    );
+    // Confidence
+    Plotly.newPlot("overview-conf-chart",
+        noiseData.map(d => traceLine(d.drift, d.raw_conf, d.model, modelColors[d.model])),
+        { ...plotLayout, yaxis: { ...plotLayout.yaxis, title: "Mean Confidence" }, height: 320 }, plotConfig
+    );
+    // Entropy
+    Plotly.newPlot("overview-ent-chart",
+        noiseData.map(d => traceLine(d.drift, d.raw_ent, d.model, modelColors[d.model])),
+        { ...plotLayout, yaxis: { ...plotLayout.yaxis, title: "Mean Entropy" }, height: 320 }, plotConfig
+    );
+}
+
+// ===================== CALIBRATION CHARTS =====================
+function updateCalibration() {
+    const model = document.getElementById("cal-model-select").value;
+    const d = calData[model];
+
+    Plotly.newPlot("cal-acc-chart", [
+        traceLine(d.drift, d.raw_acc, "Raw", calMethodColors.raw),
+        traceLine(d.drift, d.sig_acc, "Sigmoid", calMethodColors.sig, "dash"),
+        traceLine(d.drift, d.iso_acc, "Isotonic", calMethodColors.iso, "dot")
+    ], { ...plotLayout, yaxis: { ...plotLayout.yaxis, title: "Accuracy" }, height: 340 }, plotConfig);
+
+    Plotly.newPlot("cal-conf-chart", [
+        traceLine(d.drift, d.raw_conf, "Raw", calMethodColors.raw),
+        traceLine(d.drift, d.sig_conf, "Sigmoid", calMethodColors.sig, "dash"),
+        traceLine(d.drift, d.iso_conf, "Isotonic", calMethodColors.iso, "dot")
+    ], { ...plotLayout, yaxis: { ...plotLayout.yaxis, title: "Mean Confidence" }, height: 340 }, plotConfig);
+
+    Plotly.newPlot("cal-ent-chart", [
+        traceLine(d.drift, d.raw_ent, "Raw", calMethodColors.raw),
+        traceLine(d.drift, d.sig_ent, "Sigmoid", calMethodColors.sig, "dash"),
+        traceLine(d.drift, d.iso_ent, "Isotonic", calMethodColors.iso, "dot")
+    ], { ...plotLayout, yaxis: { ...plotLayout.yaxis, title: "Mean Entropy" } }, plotConfig);
+
+    // Table
+    const modelName = {LR:"Logistic Regression", RF:"Random Forest", XGB:"XGBoost"}[model];
+    let html = `<div class="table-wrap"><table>
+        <thead><tr><th>Drift</th><th>Raw Acc</th><th>Sig Acc</th><th>Iso Acc</th><th>Raw Conf</th><th>Sig Conf</th><th>Iso Conf</th><th>Raw Ent</th><th>Sig Ent</th><th>Iso Ent</th></tr></thead><tbody>`;
+    for (let i = 0; i < d.drift.length; i++) {
+        html += `<tr>
+            <td style="color:#f1f5f9;font-weight:500">${d.drift[i]}</td>
+            <td>${d.raw_acc[i].toFixed(4)}</td><td>${d.sig_acc[i].toFixed(4)}</td><td>${d.iso_acc[i].toFixed(4)}</td>
+            <td>${d.raw_conf[i].toFixed(5)}</td><td>${d.sig_conf[i].toFixed(5)}</td><td>${d.iso_conf[i].toFixed(5)}</td>
+            <td>${d.raw_ent[i].toFixed(5)}</td><td>${d.sig_ent[i].toFixed(5)}</td><td>${d.iso_ent[i].toFixed(5)}</td>
+        </tr>`;
+    }
+    html += `</tbody></table></div>`;
+    document.getElementById("cal-table").innerHTML = html;
+}
+
+// ===================== DRIFT TYPE CHARTS =====================
+function updateDriftCharts() {
+    const metric = document.getElementById("drift-metric-select").value;
+    const dType  = document.getElementById("drift-type-select").value;
+
+    const metricLabel = {raw_acc:"Accuracy", raw_conf:"Mean Confidence", raw_ent:"Mean Entropy"}[metric];
+
+    // Per-model charts
+    const modelMap = {"Logistic Regression":"drift-lr-chart", "Random Forest":"drift-rf-chart", "XGBoost":"drift-xgb-chart"};
+    for (const [mName, divId] of Object.entries(modelMap)) {
+        const traces = driftData.filter(d => d.model === mName).map(d =>
+            traceLine(d.drift, d[metric], d.drift_type, driftTypeColors[d.drift_type])
+        );
+        Plotly.newPlot(divId, traces, { ...plotLayout, yaxis: { ...plotLayout.yaxis, title: metricLabel }, height: 320 }, plotConfig);
+    }
+
+    // Cross-model comparison
+    const crossTraces = driftData.filter(d => d.drift_type === dType).map(d =>
+        traceLine(d.drift, d[metric], d.model, modelColors[d.model])
+    );
+    Plotly.newPlot("drift-compare-chart", crossTraces, { ...plotLayout, yaxis: { ...plotLayout.yaxis, title: metricLabel }, height: 320 }, plotConfig);
+
+    // Table
+    let html = `<div class="table-wrap"><table>
+        <thead><tr><th>Model</th><th>Drift Type</th><th>Level</th><th>Accuracy</th><th>Confidence</th><th>Entropy</th></tr></thead><tbody>`;
+    driftData.forEach(d => {
+        d.drift.forEach((lv, i) => {
+            html += `<tr>
+                <td style="color:#f1f5f9;font-weight:500">${d.model}</td>
+                <td>${d.drift_type}</td>
+                <td>${lv}</td>
+                <td>${d.raw_acc[i].toFixed(4)}</td>
+                <td>${d.raw_conf[i].toFixed(5)}</td>
+                <td>${d.raw_ent[i].toFixed(5)}</td>
+            </tr>`;
+        });
+    });
+    html += `</tbody></table></div>`;
+    document.getElementById("drift-table").innerHTML = html;
+}
+
+// ===================== RANKING =====================
+function renderRanking() {
+    // Compute reliability scores per model (averaged across all drift types)
+    const models = ["Logistic Regression", "Random Forest", "XGBoost"];
+    const scores = models.map(model => {
+        const mData = driftData.filter(d => d.model === model);
+        let totalDelta = 0;
+        mData.forEach(d => {
+            const da = Math.abs(d.raw_acc[3] - d.raw_acc[0]);
+            const dc = Math.abs(d.raw_conf[3] - d.raw_conf[0]);
+            const de = Math.abs(d.raw_ent[3] - d.raw_ent[0]);
+            totalDelta += (da + dc + de) / 3;
+        });
+        return { model, score: totalDelta / mData.length };
+    }).sort((a, b) => b.score - a.score);
+
+    const barColors = scores.map(s => modelColors[s.model]);
+
+    Plotly.newPlot("ranking-chart", [{
+        x: scores.map(s => s.model),
+        y: scores.map(s => s.score),
+        type: "bar",
+        width: [0.5, 0.5, 0.5],
+        marker: {
+            color: barColors,
+            line: { width: 0 },
+            opacity: 0.9
+        },
+        text: scores.map(s => s.score.toFixed(4)),
+        textposition: "outside",
+        textfont: { color: "#f1f5f9", size: 13 }
+    }], {
+        paper_bgcolor: "rgba(0,0,0,0)",
+        plot_bgcolor:  "rgba(0,0,0,0)",
+        font: { family: "Inter, sans-serif", color: "#94a3b8", size: 12 },
+        margin: { l: 56, r: 24, t: 32, b: 48 },
+        xaxis: { type: "category", gridcolor: "#1e293b", zeroline: false, title: "" },
+        yaxis: { gridcolor: "#1e293b", zeroline: false, title: "Reliability Sensitivity Score" },
+        legend: { bgcolor: "rgba(0,0,0,0)", font: { size: 11 } },
+        hovermode: "x unified",
+        height: 400
+    }, plotConfig);
+
+    let html = `<div class="table-wrap"><table>
+        <thead><tr><th>Rank</th><th>Model</th><th>Reliability Score</th><th>Assessment</th></tr></thead><tbody>`;
+    scores.forEach((s, i) => {
+        const assessment = s.score > 0.05 ? "Self-aware — failure detectable" :
+                           s.score > 0.005 ? "Partial awareness — some risk" :
+                           "Silent failure — high risk";
+        const color = s.score > 0.05 ? "var(--accent-emerald)" :
+                      s.score > 0.005 ? "var(--accent-amber)" : "var(--accent-red)";
+        html += `<tr>
+            <td style="color:#f1f5f9;font-weight:700;font-size:1.1rem">#${i+1}</td>
+            <td style="color:#f1f5f9;font-weight:500">${s.model}</td>
+            <td>${s.score.toFixed(6)}</td>
+            <td style="color:${color};font-weight:500">${assessment}</td>
+        </tr>`;
+    });
+    html += `</tbody></table></div>`;
+    document.getElementById("ranking-table").innerHTML = html;
+}
+
+// ===================== INIT =====================
+document.addEventListener("DOMContentLoaded", () => {
+    renderOverview();
+    updateCalibration();
+    updateDriftCharts();
+    renderRanking();
+});
+</script>
+
+</body>
+</html>
